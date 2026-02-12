@@ -285,8 +285,9 @@ for GW in "${GATEWAYS[@]}"; do
     # 资源摘要
     if [ -f "$RESULTS_DIR/resources.csv" ]; then
       CPU_MAX=$(tail -n +2 "$RESULTS_DIR/resources.csv" | cut -d',' -f2 | sort -n | tail -1)
-      MEM_MAX=$(tail -n +2 "$RESULTS_DIR/resources.csv" | cut -d',' -f3 | sort -n | tail -1)
-      echo "║    峰值 CPU: ${CPU_MAX}%  峰值内存: ${MEM_MAX} MB"
+      CPU_CORES_MAX=$(tail -n +2 "$RESULTS_DIR/resources.csv" | cut -d',' -f3 | sort -n | tail -1)
+      MEM_MAX=$(tail -n +2 "$RESULTS_DIR/resources.csv" | cut -d',' -f4 | sort -n | tail -1)
+      echo "║    峰值 CPU (服务器): ${CPU_MAX}%  峰值 CPU (核心): ${CPU_CORES_MAX}%  峰值内存: ${MEM_MAX} MB"
     fi
   fi
 done
