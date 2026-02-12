@@ -1,0 +1,8 @@
+node_modules/
+.next/
+dist/
+*.exe
+results/go/
+results/node/
+results/next/
+*.json.bak
