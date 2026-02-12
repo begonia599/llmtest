@@ -20,6 +20,9 @@
 #   # 500 VUs, 120 秒, 全流式
 #   ./auto-bench.sh 152.53.164.118 500 --duration 120s --stream 1.0
 #
+#   # 限制到 2 核（CPU 0,1），并强制 Go 使用 2 个逻辑核
+#   ./auto-bench.sh 152.53.164.118 1000 --cpu-set 0,1 --go-maxprocs 2
+#
 #   # 只测 Go 和 Node.js
 #   ./auto-bench.sh 152.53.164.118 100 --only go,node
 #
@@ -45,6 +48,8 @@ COOLDOWN=30
 SSH_USER="root"
 REMOTE_DIR="/root/llmtest"
 GW_PORT=8080
+CPU_SET=""
+GO_MAXPROCS=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -58,6 +63,8 @@ while [ $# -gt 0 ]; do
     --only)        ONLY="$2"; shift 2 ;;
     --cooldown)    COOLDOWN="$2"; shift 2 ;;
     --ssh-user)    SSH_USER="$2"; shift 2 ;;
+    --cpu-set)     CPU_SET="$2"; shift 2 ;;
+    --go-maxprocs) GO_MAXPROCS="$2"; shift 2 ;;
     *) echo "未知参数: $1"; exit 1 ;;
   esac
 done
@@ -120,6 +127,15 @@ if ! ssh_run "curl -sf http://${LOCAL_IP}:${MOCK_PORT}/health" > /dev/null 2>&1;
 fi
 log "上游连通正常"
 
+# ── CPU 绑核工具检查（可选） ─────────────────────────────
+if [ -n "$CPU_SET" ]; then
+  log "检查 Server B 是否支持 taskset..."
+  if ! ssh_run "command -v taskset >/dev/null 2>&1"; then
+    echo "Server B 不支持 taskset，请先安装 util-linux 后重试"
+    exit 1
+  fi
+fi
+
 # ── 确保 Server B 的 8080 端口空闲 ─────────────────────
 log "清理 Server B 上的 ${GW_PORT} 端口..."
 ssh_run "fuser -k ${GW_PORT}/tcp 2>/dev/null || true"
@@ -139,6 +155,8 @@ echo "║  Stream:     ${STREAM}"
 echo "║  Latency:    ${LATENCY}"
 echo "║  Creds:      ${CREDS}"
 echo "║  Gateways:   ${ONLY}"
+echo "║  CPU Set:    ${CPU_SET:-all}"
+echo "║  Go P:       ${GO_MAXPROCS:-default}"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -161,15 +179,25 @@ test_gateway() {
   # 2. 启动网关
   log "[${GW_TYPE}] 启动网关..."
   local START_CMD
+  local CPU_PREFIX=""
+  local GO_ENV_PREFIX=""
+
+  if [ -n "$CPU_SET" ]; then
+    CPU_PREFIX="taskset -c ${CPU_SET} "
+  fi
+  if [ -n "$GO_MAXPROCS" ]; then
+    GO_ENV_PREFIX="GOMAXPROCS=${GO_MAXPROCS} "
+  fi
+
   case "$GW_TYPE" in
     go)
-      START_CMD="cd ${REMOTE_DIR}/gateway-go && ./gateway-go -port ${GW_PORT} -upstream http://${LOCAL_IP}:${MOCK_PORT} -creds ${CREDS}"
+      START_CMD="cd ${REMOTE_DIR}/gateway-go && ${GO_ENV_PREFIX}${CPU_PREFIX}./gateway-go -port ${GW_PORT} -upstream http://${LOCAL_IP}:${MOCK_PORT} -creds ${CREDS}"
       ;;
     node)
-      START_CMD="cd ${REMOTE_DIR}/gateway-node && UPSTREAM_URL=http://${LOCAL_IP}:${MOCK_PORT} PORT=${GW_PORT} CRED_COUNT=${CREDS} node dist/index.js"
+      START_CMD="cd ${REMOTE_DIR}/gateway-node && UPSTREAM_URL=http://${LOCAL_IP}:${MOCK_PORT} PORT=${GW_PORT} CRED_COUNT=${CREDS} ${CPU_PREFIX}node dist/index.js"
       ;;
     next)
-      START_CMD="cd ${REMOTE_DIR}/gateway-next && UPSTREAM_URL=http://${LOCAL_IP}:${MOCK_PORT} PORT=${GW_PORT} CRED_COUNT=${CREDS} node node_modules/.bin/next start -p ${GW_PORT}"
+      START_CMD="cd ${REMOTE_DIR}/gateway-next && UPSTREAM_URL=http://${LOCAL_IP}:${MOCK_PORT} PORT=${GW_PORT} CRED_COUNT=${CREDS} ${CPU_PREFIX}node node_modules/.bin/next start -p ${GW_PORT}"
       ;;
     *)
       log "未知网关类型: ${GW_TYPE}"

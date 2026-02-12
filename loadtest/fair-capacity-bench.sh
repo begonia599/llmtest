@@ -46,6 +46,8 @@ ERROR_RATE="0"
 PRESET="all"
 COOLDOWN=20
 SSH_USER="root"
+CPU_SET=""
+GO_MAXPROCS=""
 
 # Fixed pass criteria
 SUCCESS_MIN="99.5"
@@ -66,6 +68,8 @@ while [ $# -gt 0 ]; do
     --preset) PRESET="$2"; shift 2 ;;
     --cooldown) COOLDOWN="$2"; shift 2 ;;
     --ssh-user) SSH_USER="$2"; shift 2 ;;
+    --cpu-set) CPU_SET="$2"; shift 2 ;;
+    --go-maxprocs) GO_MAXPROCS="$2"; shift 2 ;;
     --success-min) SUCCESS_MIN="$2"; shift 2 ;;
     --p95-max-ms) P95_MAX_MS="$2"; shift 2 ;;
     --interrupted-max-ratio) INTERRUPTED_MAX_RATIO="$2"; shift 2 ;;
@@ -113,6 +117,7 @@ echo "Gateways:      $GATEWAYS"
 echo "VUs list:      $VUS_LIST"
 echo "Repeats:       $REPEATS"
 echo "Shared config: creds=$CREDS duration=$DURATION stream=$STREAM latency=$LATENCY error=$ERROR_RATE preset=$PRESET"
+echo "CPU config:    cpu_set=${CPU_SET:-all} go_maxprocs=${GO_MAXPROCS:-default}"
 echo "Pass criteria: success>=$SUCCESS_MIN%, p95<=$P95_MAX_MS ms, interrupted_ratio<=$INTERRUPTED_MAX_RATIO%"
 echo "Manifest:      $MANIFEST"
 echo "===================================================================="
@@ -132,17 +137,27 @@ for vus in "${VUS_ARR[@]}"; do
 
       echo "  -> [$gw] start (order=$idx)"
 
+      cmd=(
+        "$AUTO_BENCH" "$SERVER_B" "$vus"
+        --creds "$CREDS"
+        --duration "$DURATION"
+        --stream "$STREAM"
+        --latency "$LATENCY"
+        --error-rate "$ERROR_RATE"
+        --preset "$PRESET"
+        --only "$gw"
+        --cooldown "$COOLDOWN"
+        --ssh-user "$SSH_USER"
+      )
+      if [ -n "$CPU_SET" ]; then
+        cmd+=( --cpu-set "$CPU_SET" )
+      fi
+      if [ -n "$GO_MAXPROCS" ]; then
+        cmd+=( --go-maxprocs "$GO_MAXPROCS" )
+      fi
+
       set +e
-      "$AUTO_BENCH" "$SERVER_B" "$vus" \
-        --creds "$CREDS" \
-        --duration "$DURATION" \
-        --stream "$STREAM" \
-        --latency "$LATENCY" \
-        --error-rate "$ERROR_RATE" \
-        --preset "$PRESET" \
-        --only "$gw" \
-        --cooldown "$COOLDOWN" \
-        --ssh-user "$SSH_USER" 2>&1 | tee "$log_file"
+      "${cmd[@]}" 2>&1 | tee "$log_file"
       exit_code=${PIPESTATUS[0]}
       set -e
 
