@@ -73,7 +73,7 @@ SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ${SSH_USER}@${SERVE
 # ── 工具函数 ────────────────────────────────────────────
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 ssh_run() { $SSH_CMD "$@"; }
-ssh_bg() { $SSH_CMD "nohup $* > /dev/null 2>&1 & echo \$!"; }
+ssh_bg() { $SSH_CMD "nohup bash -c '$*' > /dev/null 2>&1 & echo \$!"; }
 
 wait_for_health() {
   local url=$1
