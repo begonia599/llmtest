@@ -261,6 +261,7 @@ apply_global_overrides() {
   [ -n "$O_SUCCESS_MIN" ] && SUCCESS_MIN="$O_SUCCESS_MIN"
   [ -n "$O_P95_MAX_MS" ] && P95_MAX_MS="$O_P95_MAX_MS"
   [ -n "$O_INTERRUPTED_MAX_RATIO" ] && INTERRUPTED_MAX_RATIO="$O_INTERRUPTED_MAX_RATIO"
+  return 0
 }
 
 mkdir -p "$BATCH_DIR"
