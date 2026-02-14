@@ -124,6 +124,7 @@ fi
 expand_rounds() {
   local expr="$1"
   local -a parts out
+  local -A seen
   local item start end r
   IFS=',' read -r -a parts <<< "$expr"
   for item in "${parts[@]}"; do
@@ -135,16 +136,25 @@ expand_rounds() {
         return 1
       fi
       for r in $(seq "$start" "$end"); do
-        out+=("$r")
+        if [ -z "${seen[$r]+x}" ]; then
+          out+=("$r")
+          seen[$r]=1
+        fi
       done
     elif [[ "$item" =~ ^[0-9]+$ ]]; then
-      out+=("$item")
+      if [ -z "${seen[$item]+x}" ]; then
+        out+=("$item")
+        seen[$item]=1
+      fi
     else
       echo "Invalid round token: $item" >&2
       return 1
     fi
   done
-  printf "%s\n" "${out[@]}" | awk '!seen[$0]++'
+  if [ "${#out[@]}" -eq 0 ]; then
+    return 1
+  fi
+  printf "%s\n" "${out[@]}"
 }
 
 set_round_defaults() {
@@ -256,7 +266,16 @@ apply_global_overrides() {
 mkdir -p "$BATCH_DIR"
 echo "round,exit_code,manifest,summary_file" > "$INDEX_CSV"
 
-mapfile -t ROUND_LIST < <(expand_rounds "$ROUNDS_EXPR")
+ROUND_LIST=()
+while IFS= read -r r; do
+  [ -n "$r" ] && ROUND_LIST+=("$r")
+done < <(expand_rounds "$ROUNDS_EXPR")
+
+if [ "${#ROUND_LIST[@]}" -eq 0 ]; then
+  echo "No rounds resolved from --rounds '$ROUNDS_EXPR'."
+  echo "Use examples: --rounds 7-10 or --rounds 7,8,9,10"
+  exit 1
+fi
 
 echo "============================================================"
 echo "Round Batch Runner"
